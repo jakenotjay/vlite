@@ -2,11 +2,28 @@ import numpy as np
 from uuid import uuid4
 from .model import EmbeddingModel
 from .utils import chop_and_chunk, cos_sim
+from typing import List
 
 class VLite:
     '''
     vlite is a simple vector database that stores vectors in a numpy array.
     '''
+
+    texts: List[str] = []
+    """List of text chunks that have been memorized."""
+
+    metadata: dict = {}
+    """Metadata for each text chunk."""
+
+    vectors = None
+    """Numpy array of vectors."""
+
+    model = None
+    """Embedding model."""
+
+    lookup_table: dict = {}
+    """Lookup table of text chunk ids to metadata indices."""
+
     def __init__(self, collection='vlite.npz',device='mps',model_name=None):
         self.collection = collection
         self.device = device
@@ -16,10 +33,12 @@ class VLite:
                 self.texts = data['texts'].tolist()
                 self.metadata = data['metadata'].tolist()
                 self.vectors = data['vectors']
+                self.lookup_table = data['lookup_table'].tolist()
         except FileNotFoundError:
             self.texts = []
             self.metadata = {}
             self.vectors = np.empty((0, self.model.dimension))
+            self.lookup_table = {}
     
     def add_vector(self, vector):
         self.vectors = np.vstack((self.vectors, vector))
@@ -38,17 +57,25 @@ class VLite:
         chunks = chop_and_chunk(text)
         encoded_data = self.model.embed(texts=chunks, device=self.device)
         self.vectors = np.vstack((self.vectors, encoded_data))
+
+        # add the metadata to the metadata dict
+        self.metadata[id] = metadata or {}
+
         for chunk in chunks:
             self.texts.append(chunk)
+            # index of the last text chunk
             idx = len(self.texts) - 1
-            self.metadata[idx] = metadata or {}
-            self.metadata[idx]['index'] = id or idx
+            self.lookup_table[idx] = id
+
         self.save()
         return id, self.vectors
+    
+    def chunk_id_to_metadata(self, chunk_id):
+        return self.metadata[self.lookup_table[chunk_id]]
 
     def remember(self, text=None, id=None, top_k=5):
         if id:
-            return self.metadata[id]
+            return self.chunk_id_to_metadata(id)
         if text:
 
             sims = cos_sim(self.model.embed(texts=text, device=self.device) , self.vectors)
@@ -66,4 +93,4 @@ class VLite:
             
     def save(self):
         with open(self.collection, 'wb') as f:
-            np.savez(f, texts=self.texts, metadata=self.metadata, vectors=self.vectors)
+            np.savez(f, texts=self.texts, metadata=self.metadata, vectors=self.vectors, lookup_table=self.lookup_table)
