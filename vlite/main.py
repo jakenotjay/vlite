@@ -59,10 +59,10 @@ class VLite:
             top_5_idx = np.argpartition(sims, -top_k)[-top_k:]  
 
             # Use np.argsort to sort just those top 5 indices
-            top_5_idx = top_5_idx[np.argsort(sims[top_5_idx])[::-1]]  
+            top_5_idx = top_5_idx[np.argsort(sims[top_5_idx])[::-1]]
 
             # print("[remember] Top k sims:", sims[top_5_idx])
-            return [self.texts[idx] for idx in top_5_idx], sims[top_5_idx]
+            return [self.texts[idx] for idx in top_5_idx], sims[top_5_idx], top_5_idx
             
     def save(self):
         with open(self.collection, 'wb') as f:
